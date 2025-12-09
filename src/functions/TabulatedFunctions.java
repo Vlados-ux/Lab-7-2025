@@ -4,18 +4,15 @@ import java.io.*;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.InvocationTargetException;
 
-
 public final class TabulatedFunctions {
     private static TabulatedFunctionFactory factory = new ArrayTabulatedFunction.ArrayTabulatedFunctionFactory();
 
     private TabulatedFunctions() {
         throw new UnsupportedOperationException("Нельзя создавать объекты служебного класса");
     }
-
     public static void setTabulatedFunctionFactory(TabulatedFunctionFactory factory) {
         TabulatedFunctions.factory = factory;
     }
-
     public static TabulatedFunction createTabulatedFunction(double leftX, double rightX, int pointsCount) {
         return factory.createTabulatedFunction(leftX, rightX, pointsCount);
     }
@@ -26,6 +23,39 @@ public final class TabulatedFunctions {
 
     public static TabulatedFunction createTabulatedFunction(FunctionPoint[] points) {
         return factory.createTabulatedFunction(points);
+    }
+
+    public static TabulatedFunction createTabulatedFunction(Class<? extends TabulatedFunction> functionClass, double leftX, double rightX, int pointsCount) {
+        try {
+            Constructor<? extends TabulatedFunction> constructor =
+                    functionClass.getConstructor(double.class, double.class, int.class);
+            return constructor.newInstance(leftX, rightX, pointsCount);
+        } catch (NoSuchMethodException | IllegalAccessException |
+                 InstantiationException | InvocationTargetException e) {
+            throw new IllegalArgumentException("Ошибка при создании объекта через рефлексию", e);
+        }
+    }
+
+    public static TabulatedFunction createTabulatedFunction(Class<? extends TabulatedFunction> functionClass, double leftX, double rightX, double[] values) {
+        try {
+            Constructor<? extends TabulatedFunction> constructor =
+                    functionClass.getConstructor(double.class, double.class, double[].class);
+            return constructor.newInstance(leftX, rightX, values);
+        } catch (NoSuchMethodException | IllegalAccessException |
+                 InstantiationException | InvocationTargetException e) {
+            throw new IllegalArgumentException("Ошибка при создании объекта через рефлексию", e);
+        }
+    }
+
+    public static TabulatedFunction createTabulatedFunction(Class<? extends TabulatedFunction> functionClass, FunctionPoint[] points) {
+        try {
+            Constructor<? extends TabulatedFunction> constructor =
+                    functionClass.getConstructor(FunctionPoint[].class);
+            return constructor.newInstance((Object)points);
+        } catch (NoSuchMethodException | IllegalAccessException |
+                 InstantiationException | InvocationTargetException e) {
+            throw new IllegalArgumentException("Ошибка при создании объекта через рефлексию", e);
+        }
     }
 
     public static TabulatedFunction tabulate(Function function, double leftX, double rightX, int pointsCount) {
@@ -46,6 +76,75 @@ public final class TabulatedFunctions {
         }
 
         return factory.createTabulatedFunction(points);
+    }
+
+    public static TabulatedFunction tabulate(Class<? extends TabulatedFunction> functionClass, Function function, double leftX, double rightX, int pointsCount) {
+        if (leftX < function.getLeftDomainBorder() || rightX > function.getRightDomainBorder()) {
+            throw new IllegalArgumentException("Границы табуляции выходят за область определения функции");
+        }
+        if (pointsCount < 2) {
+            throw new IllegalArgumentException("Требуется не менее 2 точек");
+        }
+
+        FunctionPoint[] points = new FunctionPoint[pointsCount];
+        double step = (rightX - leftX) / (pointsCount - 1);
+
+        for (int i = 0; i < pointsCount; i++) {
+            double x = leftX + i * step;
+            double y = function.getFunctionValue(x);
+            points[i] = new FunctionPoint(x, y);
+        }
+
+        return createTabulatedFunction(functionClass, points);
+    }
+
+    public static TabulatedFunction inputTabulatedFunction(Class<? extends TabulatedFunction> functionClass, InputStream in) {
+        try (DataInputStream dis = new DataInputStream(in)) {
+            int pointsCount = dis.readInt();
+            FunctionPoint[] points = new FunctionPoint[pointsCount];
+
+            for (int i = 0; i < pointsCount; i++) {
+                double x = dis.readDouble();
+                double y = dis.readDouble();
+                points[i] = new FunctionPoint(x, y);
+            }
+
+            return createTabulatedFunction(functionClass, points);
+        } catch (IOException e) {
+            throw new RuntimeException("Ошибка чтения табулированной функции из потока", e);
+        }
+    }
+
+    public static TabulatedFunction readTabulatedFunction(Class<? extends TabulatedFunction> functionClass, Reader in) {
+        try {
+            StreamTokenizer tokenizer = new StreamTokenizer(in);
+            tokenizer.parseNumbers();
+
+            if (tokenizer.nextToken() != StreamTokenizer.TT_NUMBER) {
+                throw new RuntimeException("Ожидалось количество точек");
+            }
+            int pointsCount = (int) tokenizer.nval;
+
+            FunctionPoint[] points = new FunctionPoint[pointsCount];
+
+            for (int i = 0; i < pointsCount; i++) {
+                if (tokenizer.nextToken() != StreamTokenizer.TT_NUMBER) {
+                    throw new RuntimeException("Ожидалась координата X");
+                }
+                double x = tokenizer.nval;
+
+                if (tokenizer.nextToken() != StreamTokenizer.TT_NUMBER) {
+                    throw new RuntimeException("Ожидалась координата Y");
+                }
+                double y = tokenizer.nval;
+
+                points[i] = new FunctionPoint(x, y);
+            }
+
+            return createTabulatedFunction(functionClass, points);
+        } catch (IOException e) {
+            throw new RuntimeException("Ошибка чтения табулированной функции из reader", e);
+        }
     }
 
     public static void outputTabulatedFunction(TabulatedFunction function, OutputStream out) {
@@ -123,58 +222,5 @@ public final class TabulatedFunctions {
         } catch (IOException e) {
             throw new RuntimeException("Ошибка чтения табулированной функции из reader", e);
         }
-    }
-    public static TabulatedFunction createTabulatedFunction(Class<? extends TabulatedFunction> functionClass, double leftX, double rightX, int pointsCount) {
-        try {
-            Constructor<? extends TabulatedFunction> constructor =
-                    functionClass.getConstructor(double.class, double.class, int.class);
-            return constructor.newInstance(leftX, rightX, pointsCount);
-        } catch (NoSuchMethodException | IllegalAccessException |
-                 InstantiationException | InvocationTargetException e) {
-            throw new IllegalArgumentException("Ошибка при создании объекта через рефлексию", e);
-        }
-    }
-
-    public static TabulatedFunction createTabulatedFunction(Class<? extends TabulatedFunction> functionClass, double leftX, double rightX, double[] values) {
-        try {
-            Constructor<? extends TabulatedFunction> constructor =
-                    functionClass.getConstructor(double.class, double.class, double[].class);
-            return constructor.newInstance(leftX, rightX, values);
-        } catch (NoSuchMethodException | IllegalAccessException |
-                 InstantiationException | InvocationTargetException e) {
-            throw new IllegalArgumentException("Ошибка при создании объекта через рефлексию", e);
-        }
-    }
-
-    public static TabulatedFunction createTabulatedFunction(Class<? extends TabulatedFunction> functionClass, FunctionPoint[] points) {
-        try {
-            Constructor<? extends TabulatedFunction> constructor =
-                    functionClass.getConstructor(FunctionPoint[].class);
-            return constructor.newInstance((Object)points);
-        } catch (NoSuchMethodException | IllegalAccessException |
-                 InstantiationException | InvocationTargetException e) {
-            throw new IllegalArgumentException("Ошибка при создании объекта через рефлексию", e);
-        }
-    }
-
-
-    public static TabulatedFunction tabulate(Class<? extends TabulatedFunction> functionClass, Function function, double leftX, double rightX, int pointsCount) {
-        if (leftX < function.getLeftDomainBorder() || rightX > function.getRightDomainBorder()) {
-            throw new IllegalArgumentException("Границы табуляции выходят за область определения функции");
-        }
-        if (pointsCount < 2) {
-            throw new IllegalArgumentException("Требуется не менее 2 точек");
-        }
-
-        FunctionPoint[] points = new FunctionPoint[pointsCount];
-        double step = (rightX - leftX) / (pointsCount - 1);
-
-        for (int i = 0; i < pointsCount; i++) {
-            double x = leftX + i * step;
-            double y = function.getFunctionValue(x);
-            points[i] = new FunctionPoint(x, y);
-        }
-
-        return createTabulatedFunction(functionClass, points);
     }
 }

@@ -2,20 +2,27 @@ import functions.*;
 import functions.basic.Cos;
 import functions.basic.Sin;
 
+import java.io.*;
+
 public class TestPatterns {
     public static void main(String[] args) {
         System.out.println("Тестирование:\n");
-        System.out.println("1.Тестирование итератора");
+        System.out.println("1. Тестирование итератора");
         testIterator();
         System.out.println();
 
-        System.out.println("2.Тестирование фабричного метода");
+        System.out.println("2. Тестирование фабричного метода");
         testFactoryMethod();
         System.out.println();
 
-        System.out.println("3.Тестирование рефлексии");
+        System.out.println("3. Тестирование рефлексии");
         testReflection();
         System.out.println();
+
+        System.out.println("4. Тестирование чтения с рефлексией");
+        testReflectionIO();
+        System.out.println();
+
         System.out.println("Все тесты завершены успешно");
     }
 
@@ -43,7 +50,7 @@ public class TestPatterns {
             System.out.printf("   Точка %d: %s%n", pointNumber++, point);
         }
 
-        System.out.println("\nИтераторы работают(можно использовать for-each)");
+        System.out.println("\nИтераторы работают (можно использовать for-each)");
     }
 
     private static void testFactoryMethod() {
@@ -72,13 +79,13 @@ public class TestPatterns {
         System.out.println("Создана tabulate(f, 0, π, 11) с восстановленной фабрикой");
         System.out.println("Тип созданного объекта: " + tabulatedFunc.getClass().getSimpleName());
 
-        System.out.println("\nФабричный метод работает(можно динамически менять тип создаваемых объектов)");
+        System.out.println("\nФабричный метод работает (можно динамически менять тип создаваемых объектов)");
     }
 
     private static void testReflection() {
         System.out.println("\nДемонстрация работы рефлексии:");
-        System.out.println();
         TabulatedFunction reflectedFunc;
+
         System.out.println("\nСоздание ArrayTabulatedFunction через рефлексию:");
         reflectedFunc = TabulatedFunctions.createTabulatedFunction(
                 ArrayTabulatedFunction.class,
@@ -143,5 +150,77 @@ public class TestPatterns {
                 System.out.println("Причина: " + e.getCause().getClass().getSimpleName());
             }
         }
+
+        System.out.println("\nРефлексия работает (можно создавать объекты по имени класса)");
+    }
+
+    private static void testReflectionIO() {
+        System.out.println("\nТестирование методов чтения с рефлексией:");
+
+        TabulatedFunction originalFunc = new ArrayTabulatedFunction(
+                0, 10, new double[]{0, 1, 4, 9, 16, 25});
+
+        System.out.println("\nИсходная функция: " + originalFunc);
+
+        try {
+            System.out.println("\nЧтение из бинарного потока:");
+
+            ByteArrayOutputStream byteOut = new ByteArrayOutputStream();
+            TabulatedFunctions.outputTabulatedFunction(originalFunc, byteOut);
+            byte[] binaryData = byteOut.toByteArray();
+
+            ByteArrayInputStream byteIn1 = new ByteArrayInputStream(binaryData);
+            TabulatedFunction readArrayFunc = TabulatedFunctions.inputTabulatedFunction(
+                    ArrayTabulatedFunction.class, byteIn1);
+            System.out.println("   Прочитан как ArrayTabulatedFunction: " +
+                    readArrayFunc.getClass().getSimpleName());
+            System.out.println("   Результат: " + readArrayFunc);
+
+            ByteArrayInputStream byteIn2 = new ByteArrayInputStream(binaryData);
+            TabulatedFunction readListFunc = TabulatedFunctions.inputTabulatedFunction(
+                    LinkedListTabulatedFunction.class, byteIn2);
+            System.out.println("   Прочитан как LinkedListTabulatedFunction: " +
+                    readListFunc.getClass().getSimpleName());
+            System.out.println("   Результат: " + readListFunc);
+
+            System.out.println("\nЧтение из текстового потока:");
+
+            StringWriter writer = new StringWriter();
+            TabulatedFunctions.writeTabulatedFunction(originalFunc, writer);
+            String textData = writer.toString();
+
+            System.out.println("    Текстовые данные: \"" + textData + "\"");
+
+            StringReader reader = new StringReader(textData);
+            TabulatedFunction textReadFunc = TabulatedFunctions.readTabulatedFunction(
+                    LinkedListTabulatedFunction.class, reader);
+            System.out.println("   Прочитан из текста как LinkedListTabulatedFunction: " +
+                    textReadFunc.getClass().getSimpleName());
+            System.out.println("   Результат: " + textReadFunc);
+
+            System.out.println("\nСравнение функций:");
+            System.out.println("   Исходная и прочитанная (Array) идентичны: " +
+                    originalFunc.equals(readArrayFunc));
+            System.out.println("   Исходная и прочитанная (List) идентичны: " +
+                    originalFunc.equals(readListFunc));
+            System.out.println("   Array и List представления идентичны: " +
+                    readArrayFunc.equals(readListFunc));
+
+            System.out.println("\nДемонстрация обработки ошибок:");
+            try {
+                ByteArrayInputStream byteIn3 = new ByteArrayInputStream(new byte[]{1, 2, 3});
+                TabulatedFunctions.inputTabulatedFunction(
+                        ArrayTabulatedFunction.class, byteIn3);
+            } catch (RuntimeException e) {
+                System.out.println("Поймано исключение (ожидаемо): " + e.getClass().getSimpleName());
+            }
+
+        } catch (Exception e) {
+            System.out.println("Ошибка: " + e.getMessage());
+            e.printStackTrace();
+        }
+
+        System.out.println("\nМетоды чтения с рефлексией работают");
+        System.out.println("Можно указать класс объекта при чтении из потока");
     }
 }
